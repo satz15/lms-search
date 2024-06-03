@@ -5,6 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 function App() {
   const [loading, setLoading] = useState(false);
   const [apiData, setApiData] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
 
   // form states
   const [topic, setTopic] = useState("");
@@ -14,7 +15,22 @@ function App() {
   // api key
   const genAI = new GoogleGenerativeAI("AIzaSyBYqmeame9V10lbKVwD9NObTRn3WwOBm3M");
 
-  // response from api
+  // Function to fetch image URL based on topic
+  const fetchImage = async (topic) => {
+    try {
+      const response = await fetch(`https://pixabay.com/api/?key=44201396-8aaada7e3a6aaf141c00ce9d3&q=${topic}&image_type=photo`);
+      const data = await response.json();
+      if (data.hits.length > 0) {
+        setImageUrl(data.hits[0].webformatURL);
+      } else {
+        setImageUrl("");
+      }
+    } catch (error) {
+      console.error("Error fetching image:", error);
+    }
+  };
+
+  // Response from API
   const fetchData = async () => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-pro" });
@@ -24,6 +40,7 @@ function App() {
       const result = await model.generateContent(fullPrompt);
       const response = await result.response;
       const text = await response.text();
+      await fetchImage(topic);
       setApiData(text);
       setLoading(false);
     } catch (error) {
@@ -34,6 +51,11 @@ function App() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setLoading(true);
+    fetchData();
+  };
+
+  const handleRegenerate = () => {
     setLoading(true);
     fetchData();
   };
@@ -93,7 +115,21 @@ function App() {
             <span className="ml-2">Loading...</span>
           </div>
         ) : (
-          <pre className="bg-gray-100 p-4 rounded-md shadow-md whitespace-pre-wrap">{apiData}</pre>
+          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-800 mb-2">Generated Content</h2>
+            <pre className="bg-gray-100 p-4 rounded-md shadow-inner whitespace-pre-wrap text-sm text-gray-700">{apiData}</pre>
+            {imageUrl && (
+              <div className="mt-4">
+                <img src={imageUrl} alt={topic} className="w-full h-auto rounded-md shadow-md" />
+              </div>
+            )}
+            <button 
+              onClick={handleRegenerate} 
+              className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md shadow-sm hover:bg-indigo-700"
+            >
+              Regenerate
+            </button>
+          </div>
         )}
       </div>
     </div>
