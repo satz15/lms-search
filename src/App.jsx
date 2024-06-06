@@ -1,36 +1,23 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import "./App.css";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import apiKey from "./data";
+import html2pdf from "html2pdf.js";
 
 function App() {
   const [loading, setLoading] = useState(false);
   const [apiData, setApiData] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [showContent, setShowContent] = useState(false);
 
-  // form states
   const [topic, setTopic] = useState("");
   const [grade, setGrade] = useState("");
   const [duration, setDuration] = useState("");
 
-  // api key
-  const genAI = new GoogleGenerativeAI("AIzaSyBYqmeame9V10lbKVwD9NObTRn3WwOBm3M");
+  const key = apiKey;
+  const genAI = new GoogleGenerativeAI(key);
 
-  // Function to fetch image URL based on topic
-  const fetchImage = async (topic) => {
-    try {
-      const response = await fetch(`https://pixabay.com/api/?key=44201396-8aaada7e3a6aaf141c00ce9d3&q=${topic}&image_type=photo`);
-      const data = await response.json();
-      if (data.hits.length > 0) {
-        setImageUrl(data.hits[0].webformatURL);
-      } else {
-        setImageUrl("");
-      }
-    } catch (error) {
-      console.error("Error fetching image:", error);
-    }
-  };
+  const contentRef = useRef();
 
-  // Response from API
   const fetchData = async () => {
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-pro" });
@@ -39,10 +26,11 @@ function App() {
       `;
       const result = await model.generateContent(fullPrompt);
       const response = await result.response;
-      const text = await response.text();
-      await fetchImage(topic);
+      let text = await response.text();
+      text = text.replace(/\*/g, "");
       setApiData(text);
       setLoading(false);
+      setShowContent(true);
     } catch (error) {
       console.error("Error fetching data:", error);
       setLoading(false);
@@ -52,18 +40,25 @@ function App() {
   const handleSubmit = (e) => {
     e.preventDefault();
     setLoading(true);
+    setShowContent(false);
     fetchData();
   };
 
   const handleRegenerate = () => {
     setLoading(true);
+    setShowContent(false);
     fetchData();
+  };
+
+  const handleDownloadPdf = () => {
+    const element = contentRef.current;
+    html2pdf().from(element).save();
   };
 
   return (
     <div className="container mx-auto p-6">
       <h1 className="text-2xl font-bold mb-4">Learning Management System</h1>
-      <h3 className="text-xl mb-6">Custom AI Query</h3>
+      <h3 className="text-xl mb-6">Lesson Plan Generator</h3>
       <div className="form-container mb-10">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="form-group">
@@ -105,33 +100,38 @@ function App() {
           <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-md shadow-sm hover:bg-indigo-700">Submit</button>
         </form>
       </div>
-      <div className="response-container mt-4">
-        {loading ? (
-          <div className="flex justify-center items-center">
-            <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span className="ml-2">Loading...</span>
-          </div>
-        ) : (
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-800 mb-2">Generated Content</h2>
-            <pre className="bg-gray-100 p-4 rounded-md shadow-inner whitespace-pre-wrap text-sm text-gray-700">{apiData}</pre>
-            {imageUrl && (
-              <div className="mt-4">
-                <img src={imageUrl} alt={topic} className="w-full h-auto rounded-md shadow-md" />
+      {loading ? (
+        <div className="flex justify-center items-center">
+          <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span className="ml-2">Loading...</span>
+        </div>
+      ) : (
+        showContent && (
+          <div className="response-container mt-4">
+            <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-800 mb-2">Generated Content</h2>
+              <div ref={contentRef} className="p-4 rounded-md border border-gray-100 bg-gray-300">
+                <pre className="whitespace-pre-wrap text-gray-800 text-xl font-sans">{apiData}</pre>
               </div>
-            )}
-            <button 
-              onClick={handleRegenerate} 
-              className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md shadow-sm hover:bg-indigo-700"
-            >
-              Regenerate
-            </button>
+              <button 
+                onClick={handleRegenerate} 
+                className="mt-4 bg-indigo-600 text-white px-4 py-2 mr-4 rounded-md shadow-sm hover:bg-indigo-700"
+              >
+                Regenerate
+              </button>
+              <button
+                onClick={handleDownloadPdf}
+                className="mt-4 bg-green-600 text-white px-4 py-2 rounded-md shadow-sm hover:bg-green-700"
+              >
+                Download PDF
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        )
+      )}
     </div>
   );
 }
