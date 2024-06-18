@@ -3,6 +3,7 @@ import "./App.css";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import apiKey from "./data";
 import html2pdf from "html2pdf.js";
+import PptxGenJS from "pptxgenjs";
 
 function App() {
   const [loading, setLoading] = useState(false);
@@ -20,15 +21,15 @@ function App() {
 
   const fetchData = async () => {
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const model = await genAI.getGenerativeModel({ model: "gemini-pro" });
       const fullPrompt = `
         I'm a teacher for grade ${grade}th, I want to teach about ${topic} for ${duration} minutes.
       `;
       const result = await model.generateContent(fullPrompt);
       const response = await result.response;
-      let text = await response.text();
-      text = text.replace(/\*/g, "");
-      setApiData(text);
+      const text = await response.text();
+      const cleanedText = text.replace(/\*/g, "");
+      setApiData(cleanedText);
       setLoading(false);
       setShowContent(true);
     } catch (error) {
@@ -54,6 +55,88 @@ function App() {
     const element = contentRef.current;
     html2pdf().from(element).save();
   };
+
+  const handleDownloadPpt = () => {
+    const pptx = new PptxGenJS();
+    
+    // Split the content into lines
+    const lines = apiData.split("\n");
+  
+    // Variables to store the topic and its definition
+    let topicTitle = lines[0]; // Assuming the first line is the main topic
+    let topicDefinition = '';
+    let subtopicStartIndex = 1;
+  
+    // Find the definition of the topic until a subtopic keyword is encountered
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.match(/^[A-Z]/)) { // Assuming subtopics start with a capital letter
+        subtopicStartIndex = i;
+        break;
+      }
+      topicDefinition += line + '\n';
+    }
+  
+    // Add the main information to the first slide
+    const slide1 = pptx.addSlide();
+    slide1.addText(`Lesson: ${topicTitle}`, { x: 1, y: 0.5, fontSize: 24, color: '363636', fontFace: 'Arial' });
+    slide1.addText(`Time: ${duration}`, { x: 1, y: 1, fontSize: 18, color: '363636', fontFace: 'Arial' });
+    slide1.addText(`Grade: ${grade}`, { x: 1, y: 1.5, fontSize: 18, color: '363636', fontFace: 'Arial' });
+    slide1.addText(`Subject: ${topic}`, { x: 1, y: 2, fontSize: 18, color: '363636', fontFace: 'Arial' });
+    slide1.addText(topicDefinition.trim(), { x: 1, y: 2.5, fontSize: 18, color: '363636', fontFace: 'Arial' });
+  
+    // Process the rest of the lines to create subtopic slides
+    const subtopics = lines.slice(subtopicStartIndex);
+    let currentSubtopic = '';
+    let currentContent = '';
+  
+    const addContentToSlide = (pptx, title, content) => {
+      const maxHeight = 5; // Maximum height available for content
+      const titleHeight = 1; // Height reserved for the title
+      const fontSize = 18; // Font size for content
+      const lineHeight = 0.7; // Estimated height for each line of text
+  
+      const contentLines = content.split('\n');
+      let slide = pptx.addSlide();
+      slide.addText(title, { x: 1, y: 1, fontSize: 24, color: '363636', fontFace: 'Arial' });
+  
+      let y = titleHeight + 1.5; // Initial y position after the title
+      contentLines.forEach((line, index) => {
+        if (y + lineHeight > maxHeight) {
+          // Add new slide if current slide exceeds max height
+          slide = pptx.addSlide();
+          slide.addText(title, { x: 1, y: 1, fontSize: 24, color: '363636', fontFace: 'Arial' });
+          y = titleHeight + 1.5; // Reset y position for new slide
+        }
+        slide.addText(line, { x: 1, y: y, fontSize: fontSize, color: '363636', fontFace: 'Arial' });
+        y += lineHeight; // Increment y position
+      });
+    };
+  
+    subtopics.forEach(line => {
+      if (line.match(/^[A-Z]/)) { // Assuming each subtopic starts with a capital letter
+        if (currentSubtopic) {
+          // Add the current subtopic and its content to a new slide
+          addContentToSlide(pptx, currentSubtopic, currentContent.trim());
+        }
+        // Start a new subtopic
+        currentSubtopic = line;
+        currentContent = '';
+      } else {
+        currentContent += line + '\n';
+      }
+    });
+  
+    // Add the last subtopic and its content to a new slide
+    if (currentSubtopic) {
+      addContentToSlide(pptx, currentSubtopic, currentContent.trim());
+    }
+  
+    // Save the PowerPoint file
+    pptx.writeFile({ fileName: `${topic}_Lesson_Plan.pptx` });
+  };
+  
+  
 
   return (
     <div className="container mx-auto p-6">
@@ -113,7 +196,7 @@ function App() {
           <div className="response-container mt-4">
             <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
               <h2 className="text-lg font-semibold text-gray-800 mb-2">Generated Content</h2>
-              <div ref={contentRef} className="p-4 rounded-md border border-gray-100 bg-gray-300">
+              <div ref={contentRef} className="p-4 rounded-md border border-gray-100 ">
                 <pre className="whitespace-pre-wrap text-gray-800 text-xl font-sans">{apiData}</pre>
               </div>
               <button 
@@ -124,9 +207,15 @@ function App() {
               </button>
               <button
                 onClick={handleDownloadPdf}
-                className="mt-4 bg-green-600 text-white px-4 py-2 rounded-md shadow-sm hover:bg-green-700"
+                className="mt-4 bg-green-600 text-white px-4 py-2 mr-4 rounded-md shadow-sm hover:bg-green-700"
               >
                 Download PDF
+              </button>
+              <button
+                onClick={handleDownloadPpt}
+                className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md shadow-sm hover:bg-blue-700"
+              >
+                Download PPT
               </button>
             </div>
           </div>
